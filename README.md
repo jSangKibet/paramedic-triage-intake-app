@@ -55,6 +55,9 @@ src/
     └── triage.ts              Domain types
 ```
 
+## Quick Usage
+Download 'app-debug.apk' from the releases section and install on an android device.
+
 ## Setup
 
 Requires Node.js 22.13+ and the Expo CLI.
@@ -88,5 +91,3 @@ Tests cover Redux slice reducers (state transitions for adding/syncing triages),
 - `@react-native-community/netinfo` — connectivity monitoring
 - `@reduxjs/toolkit` + `react-redux` — state management
 - `expo-router` — file-based navigation
-
-## License
