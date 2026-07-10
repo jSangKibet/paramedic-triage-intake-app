@@ -1,59 +1,92 @@
-# paramedic-triage-intake-app
-Paramedic Triage Intake Application
+# Paramedic Triage Intake App
 
-# Welcome to your Expo app 👋
+A React Native app for field paramedics to log patient triage data with offline-first persistence. Built with Expo SDK 57, Redux Toolkit, and SQLite.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Architecture
 
-## Get started
+- **Framework:** Expo SDK 57 (React Native 0.86, TypeScript)
+- **UI Layer:** Expo Router screens and form components
+- **State Management:** Redux Toolkit (triage slice + connectivity slice)
+- **Persistence:** expo-sqlite with WAL mode
+- **Network:** @react-native-community/netinfo for connectivity monitoring, mock API simulating a 2-second delay with random failures
 
-1. Install dependencies
+## Sync Queue
 
-   ```bash
-   npm install
-   ```
+1. User submits the intake form
+2. The triage record is written to SQLite immediately with `synced = 0` — this always succeeds regardless of connectivity
+3. The record is added to the Redux store and the sync queue
+4. **If online:** the mock API is called right away. On success, the record is marked `synced = 1` in SQLite and removed from the sync queue in Redux. If the API call fails, the record stays pending
+5. **If offline:** no API call is attempted. The record sits in SQLite with `synced = 0`
+6. NetInfo listens for connectivity changes in the background. When the device comes back online, `syncPendingTriages` reads all unsynced records from SQLite, submits each to the mock API, and marks them synced one by one
+7. If the app is killed and reopened, `loadTriages` reads all records from SQLite into Redux, and the NetInfo listener triggers sync on the next online check
 
-2. Start the app
+## Project Structure
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+src/
+├── app/
+│   ├── _layout.tsx            Root providers (SQLite, Redux, Theme) + connectivity listener
+│   ├── index.tsx              Triage form screen
+│   └── history.tsx            History list with sync status
+├── components/
+│   ├── TriageForm.tsx         Form with validation
+│   ├── PriorityPicker.tsx     Tappable 1-5 priority chips
+│   ├── StatusPicker.tsx       Pending / In-Transit segmented toggle
+│   ├── SyncIndicator.tsx      Online/offline/syncing badge
+│   └── TriageCard.tsx         History list item
+├── database/
+│   ├── schema.ts              Table DDL + migrations
+│   └── triage-repository.ts   CRUD operations
+├── services/
+│   ├── mock-api.ts            Simulated POST endpoint (2s delay, 15% failure)
+│   └── sync-engine.ts         Queue processing
+├── store/
+│   ├── index.ts               Store configuration
+│   ├── hooks.ts               Typed useAppSelector/useAppDispatch
+│   ├── triageSlice.ts         Records + sync queue + thunks
+│   └── connectivitySlice.ts   Network state
+├── hooks/
+│   ├── useConnectivity.ts     NetInfo → Redux bridge
+│   └── useSQLite.ts           SQLite context hook
+├── constants/
+│   ├── theme.ts               Colors, fonts, spacing
+│   └── colors.ts              Priority color mapping
+└── types/
+    └── triage.ts              Domain types
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Setup
 
-### Other setup steps
+Requires Node.js 22.13+ and the Expo CLI.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```bash
+npm install
+npx expo start
+```
 
-## Learn more
+Press `a` for Android emulator, `i` for iOS simulator, or scan the QR code with Expo Go on a physical device.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Tests
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npx jest
+```
 
-## Join the community
+Tests cover Redux slice reducers (state transitions for adding/syncing triages), the sync engine (empty queue, full success, partial failures), and the mock API (response format, timing, failure behavior).
 
-Join our community of developers creating universal apps.
+## Airplane Mode Demo
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+1. Fill the form and submit while online — record syncs immediately
+2. Enable Airplane Mode — indicator turns red
+3. Submit another triage — saves locally, shows "Pending sync" in History
+4. Disable Airplane Mode — indicator turns yellow "Syncing...", then the pending record flips to "Synced"
+
+## Dependencies
+
+- `expo` ~57.0.4, `react-native` 0.86
+- `expo-sqlite` — local database
+- `@react-native-community/netinfo` — connectivity monitoring
+- `@reduxjs/toolkit` + `react-redux` — state management
+- `expo-router` — file-based navigation
+
+## License
